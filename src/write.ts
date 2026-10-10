@@ -54,12 +54,15 @@ export class KafkaWriter {
 
   async createTopic(topic: string, partitions: number, replicationFactor: number | undefined) {
     const admin = await this.clients.admin()
+    // MSK rejects -1 (the broker default) here, so an unset factor is chosen explicitly: 3, or the
+    // broker count on a smaller cluster.
+    const factor = replicationFactor ?? Math.min(3, await this.clients.brokerCount())
     const created = await admin.createTopics({
       timeout: this.clients.config.timeoutMs,
-      topics: [{ topic, numPartitions: partitions, replicationFactor: replicationFactor ?? -1 }]
+      topics: [{ topic, numPartitions: partitions, replicationFactor: factor }]
     })
     if (!created) throw new Error(`Topic ${topic} already exists`)
-    return { topic, partitions, created }
+    return { topic, partitions, replicationFactor: factor, created }
   }
 
   async deleteTopic(topic: string, confirm: string) {

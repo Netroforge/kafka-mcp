@@ -132,7 +132,15 @@ export async function run(work: () => Promise<unknown>): Promise<CallToolResult>
     const result = await work()
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { isError: true, content: [{ type: 'text', text: `Error: ${message}` }] }
+    return { isError: true, content: [{ type: 'text', text: `Error: ${describeError(err)}` }] }
   }
+}
+
+// The client aggregates per-item failures (e.g. "Topic creation errors") and keeps the causes in
+// `errors`; without them the message says nothing about what went wrong.
+function describeError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err)
+  const causes = (err as Error & { errors?: unknown[] }).errors
+  if (!Array.isArray(causes) || causes.length === 0) return err.message
+  return `${err.message}: ${causes.map((cause) => describeError(cause)).join('; ')}`
 }

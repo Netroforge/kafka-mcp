@@ -44,7 +44,7 @@ export class KafkaReader {
   }
 
   async describeCluster(): Promise<{ brokers: Metadata['brokers']; topicCount: number }> {
-    const metadata = await this.withConsumer(
+    const metadata = await this.clients.withConsumer(
       (consumer) =>
         new Promise<Metadata>((resolve, reject) =>
           consumer.getMetadata({ allTopics: true, timeout: this.config.timeoutMs }, (err, data) =>
@@ -235,7 +235,7 @@ export class KafkaReader {
   }
 
   private async consume(topic: string, ranges: PartitionRange[]): Promise<Message[]> {
-    return this.withConsumer(async (consumer) => {
+    return this.clients.withConsumer(async (consumer) => {
       consumer.assign(ranges.map(({ partition, start }) => ({ topic, partition, offset: start })))
       const remaining = new Map(ranges.map((range) => [range.partition, range]))
       const collected: Message[] = []
@@ -253,29 +253,6 @@ export class KafkaReader {
       }
       return collected
     })
-  }
-
-  private async withConsumer<T>(work: (consumer: RdKafkaConsumer) => Promise<T>): Promise<T> {
-    const consumer: RdKafkaConsumer = new KafkaConsumer(
-      {
-        ...this.clients.rdkafkaConfig(),
-        // librdkafka requires a group id for any consumer. It is never joined (partitions are
-        // assigned directly) and never committed to, so the group is not created on the broker.
-        'group.id': `kafka-mcp-${randomUUID()}`,
-        'enable.auto.commit': false,
-        'enable.auto.offset.store': false,
-        'fetch.wait.max.ms': 200
-      } as never,
-      {}
-    )
-    await new Promise<void>((resolve, reject) =>
-      consumer.connect({ timeout: this.config.timeoutMs }, (err) => (err ? reject(err) : resolve()))
-    )
-    try {
-      return await work(consumer)
-    } finally {
-      await new Promise<void>((resolve) => consumer.disconnect(() => resolve()))
-    }
   }
 
   private async watermarks(topic: string): Promise<Map<number, { low: number; high: number }>> {
@@ -320,6 +297,42 @@ export class KafkaClients {
       return admin
     })()
     return this.adminConnecting
+  }
+
+  async withConsumer<T>(work: (consumer: RdKafkaConsumer) => Promise<T>): Promise<T> {
+    const consumer: RdKafkaConsumer = new KafkaConsumer(
+      {
+        ...this.rdkafkaConfig(),
+        // librdkafka requires a group id for any consumer. It is never joined (partitions are
+        // assigned directly) and never committed to, so the group is not created on the broker.
+        'group.id': `kafka-mcp-${randomUUID()}`,
+        'enable.auto.commit': false,
+        'enable.auto.offset.store': false,
+        'fetch.wait.max.ms': 200
+      } as never,
+      {}
+    )
+    await new Promise<void>((resolve, reject) =>
+      consumer.connect({ timeout: this.config.timeoutMs }, (err) => (err ? reject(err) : resolve()))
+    )
+    try {
+      return await work(consumer)
+    } finally {
+      await new Promise<void>((resolve) => consumer.disconnect(() => resolve()))
+    }
+  }
+
+  /** How many brokers the cluster has, from a metadata request. */
+  async brokerCount(): Promise<number> {
+    const metadata = await this.withConsumer(
+      (consumer) =>
+        new Promise<Metadata>((resolve, reject) =>
+          consumer.getMetadata({ timeout: this.config.timeoutMs }, (err, data) =>
+            err ? reject(err) : resolve(data)
+          )
+        )
+    )
+    return metadata.brokers.length
   }
 
   async close(): Promise<void> {

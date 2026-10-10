@@ -44,7 +44,7 @@ export function registerWriteTools(server: McpServer, writer: KafkaWriter): void
           .int()
           .min(1)
           .optional()
-          .describe("Replication factor (default: the broker's default)")
+          .describe('Replication factor (default 3, or the broker count on a smaller cluster)')
       },
       annotations: write
     },

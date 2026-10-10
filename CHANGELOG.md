@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- `create_topic` without `replicationFactor` uses 3, or the broker count on a smaller cluster,
+  instead of the broker default (-1), which MSK rejects.
+- Tool errors include the underlying causes the Kafka client aggregates (e.g. why a topic could
+  not be created), not just its summary.
+
 ## 0.2.0
 
 - Optional write mode, off by default. `KAFKA_MCP_ALLOW_WRITES=true` registers five more tools:

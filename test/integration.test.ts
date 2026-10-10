@@ -366,10 +366,18 @@ describe.skipIf(!brokers)('kafka-mcp with writes enabled', () => {
   it('creates a topic', async () => {
     expect((await call('create_topic', { topic: created, partitions: 3 })).json()).toMatchObject({
       topic: created,
+      // Unset factor: min(3, brokers), and the test broker is alone.
+      replicationFactor: 1,
       created: true
     })
     const described = (await call('describe_topic', { topic: created })).json()
     expect(described.partitions).toHaveLength(3)
+  })
+
+  it('reports why a topic could not be created', async () => {
+    const failed = await call('create_topic', { topic: created, partitions: 1 })
+    expect(failed.isError).toBe(true)
+    expect(failed.text).toMatch(/already exists/i)
   })
 
   it('refuses to delete a topic without the exact name in confirm', async () => {
