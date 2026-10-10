@@ -1,7 +1,7 @@
 {
   "name": "@netroforge/kafka-mcp",
-  "version": "0.1.0",
-  "description": "Read-only MCP server for Apache Kafka, with AWS MSK IAM authentication",
+  "version": "0.2.0",
+  "description": "MCP server for Apache Kafka: read-only by default, writes behind a flag, AWS MSK IAM authentication",
   "license": "Apache-2.0",
   "author": "Netroforge",
   "homepage": "https://github.com/Netroforge/kafka-mcp",

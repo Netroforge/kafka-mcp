@@ -4,17 +4,20 @@ Guidance for AI coding agents working in this repository.
 
 ## Project
 
-A read-only MCP server for Apache Kafka (TypeScript, Node ≥22, ESM). Entry `src/index.ts` (stdio
-transport), tools in `src/tools.ts`, all Kafka access in `src/kafka.ts`, configuration from the
-environment in `src/config.ts`.
+An MCP server for Apache Kafka, read-only unless writes are turned on (TypeScript, Node ≥22, ESM).
+Entry `src/index.ts` (stdio transport), read tools in `src/tools.ts`, Kafka connections and reads in
+`src/kafka.ts`, writes in `src/write.ts` and their tools in `src/write-tools.ts`, configuration from
+the environment in `src/config.ts`.
 
 ## The rule that matters
 
-**The server never writes to a cluster.** No producer, no admin mutation (create/delete/alter topics,
-partitions, configs, groups, records), no offset commit, no `subscribe` (it joins a group). Reads use
-the librdkafka-style `KafkaConsumer` with `assign()` and auto-commit off. `test/read-only.test.ts`
-lists the forbidden calls and fails on any of them in `src/` — extend the list when the client gains
-a new write, never loosen it. Test fixtures may write; they live in `test/`.
+**Writes live only in `src/write.ts` and `src/write-tools.ts`, and those load only when
+`KAFKA_MCP_ALLOW_WRITES=true`** (the dynamic imports in `src/index.ts`). Everywhere else: no producer,
+no admin mutation (create/delete/alter topics, partitions, configs, groups, records), no offset
+commit, no `subscribe` (it joins a group). Reads use the librdkafka-style `KafkaConsumer` with
+`assign()` and auto-commit off. `test/read-only.test.ts` lists the forbidden calls and the import
+rule and fails on either — extend it when the client gains a new write, never loosen it. Test
+fixtures may write; they live in `test/`.
 
 stdout is the MCP protocol stream. Nothing may print to it: the Kafka client logs through
 `stderrLogger`, and `src/index.ts` routes `console.log` to stderr.

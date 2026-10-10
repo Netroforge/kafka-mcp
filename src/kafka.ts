@@ -14,7 +14,8 @@ const { KafkaJS, KafkaConsumer } = kafkaLib
 
 // Read-only by construction: this module never creates a producer and calls no admin operation that
 // changes the cluster, and the consumer it creates assigns partitions directly and never commits, so
-// it neither joins nor creates a consumer group. test/read-only.test.ts keeps it that way.
+// it neither joins nor creates a consumer group. Writes live only in write.ts, loaded only when they
+// are enabled. test/read-only.test.ts keeps it that way.
 
 export type Position = 'latest' | 'earliest' | 'offset' | 'timestamp'
 
@@ -36,10 +37,11 @@ interface PartitionRange {
 type RdKafkaConfig = Record<string, unknown>
 
 export class KafkaReader {
-  private admin: KafkaJSTypes.Admin | undefined
-  private adminConnecting: Promise<KafkaJSTypes.Admin> | undefined
+  private readonly config: Config
 
-  constructor(private readonly config: Config) {}
+  constructor(private readonly clients: KafkaClients) {
+    this.config = clients.config
+  }
 
   async describeCluster(): Promise<{ brokers: Metadata['brokers']; topicCount: number }> {
     const metadata = await this.withConsumer(
@@ -57,7 +59,7 @@ export class KafkaReader {
   }
 
   async listTopics(includeInternal: boolean) {
-    const admin = await this.getAdmin()
+    const admin = await this.clients.admin()
     const topics = await admin.fetchTopicMetadata({ timeout: this.config.timeoutMs })
     return topics
       .filter((topic) => includeInternal || !isInternal(topic))
@@ -71,7 +73,7 @@ export class KafkaReader {
   }
 
   async describeTopic(topic: string) {
-    const admin = await this.getAdmin()
+    const admin = await this.clients.admin()
     const [metadata] = await admin.fetchTopicMetadata({
       topics: [topic],
       timeout: this.config.timeoutMs
@@ -101,7 +103,7 @@ export class KafkaReader {
   }
 
   async listConsumerGroups() {
-    const admin = await this.getAdmin()
+    const admin = await this.clients.admin()
     const { groups } = await admin.listGroups({ timeout: this.config.timeoutMs })
     return groups
       .map((group) => ({
@@ -114,7 +116,7 @@ export class KafkaReader {
   }
 
   async describeConsumerGroup(groupId: string) {
-    const admin = await this.getAdmin()
+    const admin = await this.clients.admin()
     const { groups } = await admin.describeGroups([groupId], { timeout: this.config.timeoutMs })
     const group = groups[0]
     if (!group || group.error) {
@@ -190,13 +192,6 @@ export class KafkaReader {
     }
   }
 
-  async close(): Promise<void> {
-    const admin = this.admin
-    this.admin = undefined
-    this.adminConnecting = undefined
-    await admin?.disconnect().catch(() => undefined)
-  }
-
   private async startOffsets(
     request: ReadRequest,
     partitions: number[],
@@ -222,7 +217,7 @@ export class KafkaReader {
         if (request.timestamp === undefined) {
           throw new Error('position "timestamp" needs timestamp (epoch milliseconds)')
         }
-        const admin = await this.getAdmin()
+        const admin = await this.clients.admin()
         const found = await admin.fetchTopicOffsetsByTimestamp(request.topic, request.timestamp, {
           timeout: this.config.timeoutMs,
           isolationLevel: KafkaJS.IsolationLevel.READ_UNCOMMITTED
@@ -263,7 +258,7 @@ export class KafkaReader {
   private async withConsumer<T>(work: (consumer: RdKafkaConsumer) => Promise<T>): Promise<T> {
     const consumer: RdKafkaConsumer = new KafkaConsumer(
       {
-        ...this.rdkafkaConfig(),
+        ...this.clients.rdkafkaConfig(),
         // librdkafka requires a group id for any consumer. It is never joined (partitions are
         // assigned directly) and never committed to, so the group is not created on the broker.
         'group.id': `kafka-mcp-${randomUUID()}`,
@@ -284,7 +279,7 @@ export class KafkaReader {
   }
 
   private async watermarks(topic: string): Promise<Map<number, { low: number; high: number }>> {
-    const admin = await this.getAdmin()
+    const admin = await this.clients.admin()
     const offsets = await admin.fetchTopicOffsets(topic, {
       timeout: this.config.timeoutMs,
       isolationLevel: KafkaJS.IsolationLevel.READ_UNCOMMITTED
@@ -296,22 +291,42 @@ export class KafkaReader {
       ])
     )
   }
+}
 
-  private getAdmin(): Promise<KafkaJSTypes.Admin> {
-    if (this.admin) return Promise.resolve(this.admin)
+/** The connections reader and writer share: one admin client, and the config for the others. */
+export class KafkaClients {
+  private kafkaClient: KafkaJSTypes.Kafka | undefined
+  private adminClient: KafkaJSTypes.Admin | undefined
+  private adminConnecting: Promise<KafkaJSTypes.Admin> | undefined
+
+  constructor(readonly config: Config) {}
+
+  kafka(): KafkaJSTypes.Kafka {
+    this.kafkaClient ??= new KafkaJS.Kafka({ kafkaJS: this.kafkaJSConfig() })
+    return this.kafkaClient
+  }
+
+  admin(): Promise<KafkaJSTypes.Admin> {
+    if (this.adminClient) return Promise.resolve(this.adminClient)
     this.adminConnecting ??= (async () => {
-      const kafka = new KafkaJS.Kafka({ kafkaJS: this.kafkaJSConfig() })
-      const admin = kafka.admin()
+      const admin = this.kafka().admin()
       try {
         await admin.connect()
       } catch (err) {
         this.adminConnecting = undefined
         throw err
       }
-      this.admin = admin
+      this.adminClient = admin
       return admin
     })()
     return this.adminConnecting
+  }
+
+  async close(): Promise<void> {
+    const admin = this.adminClient
+    this.adminClient = undefined
+    this.adminConnecting = undefined
+    await admin?.disconnect().catch(() => undefined)
   }
 
   private kafkaJSConfig(): KafkaJSTypes.KafkaConfig {
@@ -347,7 +362,7 @@ export class KafkaReader {
     }
   }
 
-  private rdkafkaConfig(): RdKafkaConfig {
+  rdkafkaConfig(): RdKafkaConfig {
     const { auth, ssl } = this.config
     const sasl = auth.type !== 'none'
     const config: RdKafkaConfig = {
@@ -385,8 +400,10 @@ const stderrLogger: KafkaJSTypes.Logger = {
   setLogLevel: () => undefined
 }
 
+// Kafka's own internal topics say so; double-underscore topics are internal by convention too
+// (MSK's __amazon_msk_canary reports isInternal false).
 function isInternal(topic: { name: string; isInternal?: boolean }): boolean {
-  return topic.isInternal ?? topic.name.startsWith('__')
+  return topic.isInternal === true || topic.name.startsWith('__')
 }
 
 function stateName(state: number): string {

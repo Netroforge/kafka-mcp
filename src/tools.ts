@@ -3,10 +3,19 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { KafkaReader } from './kafka.js'
 
-// Every tool only reads. The annotations tell clients so; the reader enforces it.
+// The read tools only read. The annotations tell clients so; the reader enforces it.
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
 
-export function createServer(reader: KafkaReader, version: string, maxMessages: number): McpServer {
+/**
+ * `extend` registers more tools on the same server: index.ts passes the write tools (write-tools.ts)
+ * only when KAFKA_MCP_ALLOW_WRITES=true, so a read-only server does not even list them.
+ */
+export function createServer(
+  reader: KafkaReader,
+  version: string,
+  maxMessages: number,
+  extend?: (server: McpServer) => void
+): McpServer {
   const server = new McpServer({ name: 'kafka-mcp', version })
 
   server.registerTool(
@@ -113,10 +122,12 @@ export function createServer(reader: KafkaReader, version: string, maxMessages: 
     (args) => run(() => reader.readMessages(args))
   )
 
+  extend?.(server)
+
   return server
 }
 
-async function run(work: () => Promise<unknown>): Promise<CallToolResult> {
+export async function run(work: () => Promise<unknown>): Promise<CallToolResult> {
   try {
     const result = await work()
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }

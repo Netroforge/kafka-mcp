@@ -1,8 +1,9 @@
 # kafka-mcp
 
-A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for Apache Kafka. It lets
-an AI agent look at a cluster — topics, partitions, consumer groups and their lag, and the messages
-themselves — and nothing else: it cannot produce, change a topic, or move a consumer group's offsets.
+A [Model Context Protocol](https://modelcontextprotocol.io) server for Apache Kafka. It lets an AI
+agent look at a cluster — topics, partitions, consumer groups and their lag, and the messages
+themselves. It is **read-only unless you turn writes on**: by default it cannot produce, change a
+topic, or move a consumer group's offsets.
 
 It authenticates with AWS MSK IAM, SASL/PLAIN, SASL/SCRAM or no auth, and speaks MCP over stdio.
 
@@ -17,10 +18,28 @@ It authenticates with AWS MSK IAM, SASL/PLAIN, SASL/SCRAM or no auth, and speaks
 | `describe_consumer_group` | A group's members, and per partition the committed offset, high offset and lag           |
 | `read_messages`           | Messages from the `latest`, the `earliest`, an `offset` of a partition, or a `timestamp` |
 
+## Write mode (off by default)
+
+`KAFKA_MCP_ALLOW_WRITES=true` adds five tools. Without it they are not listed at all, and the
+modules that implement them (`src/write.ts`, `src/write-tools.ts`) are never loaded.
+
+| Tool                           | What it does                                                          |
+| ------------------------------ | --------------------------------------------------------------------- |
+| `produce_message`              | Produces one message (UTF-8 or base64 value, key, partition, headers) |
+| `create_topic`                 | Creates a topic                                                       |
+| `delete_topic`                 | Deletes a topic; `confirm` must repeat its name                       |
+| `reset_consumer_group_offsets` | Moves a group's offsets to earliest, latest, an offset or a timestamp |
+| `delete_consumer_group`        | Deletes a group; `confirm` must repeat its id                         |
+
+An offset reset is refused while the group has active members, as Kafka requires. The credentials
+still decide what reaches the broker: with MSK IAM, writes also need `kafka-cluster:WriteData`,
+`CreateTopic`, `DeleteTopic`, `AlterGroup` and `DeleteGroup`.
+
 ## Read-only, by construction
 
-- No producer is ever created, and no admin operation that changes the cluster is called.
-  `test/read-only.test.ts` fails the build if one appears in `src/`.
+- With writes off, no producer is ever created and no admin operation that changes the cluster is
+  called. `test/read-only.test.ts` fails the build if one appears in `src/` outside the two write
+  modules, or if those are loaded anywhere but behind the flag.
 - `read_messages` assigns partitions directly and never commits, so it neither joins nor creates a
   consumer group, and no group's committed offsets move. The integration tests check both.
 - Reads are bounded (`KAFKA_MCP_MAX_MESSAGES`), and keys, values and headers are cut at

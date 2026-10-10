@@ -10,6 +10,19 @@ describe('loadConfig', () => {
     expect(config.ssl).toBe(false)
     expect(config.maxMessages).toBe(50)
     expect(config.maxValueBytes).toBe(4096)
+    expect(config.allowWrites).toBe(false)
+  })
+
+  it('enables writes only on an explicit true', () => {
+    expect(
+      loadConfig({ KAFKA_BROKERS: 'a:9092', KAFKA_MCP_ALLOW_WRITES: 'true' }).allowWrites
+    ).toBe(true)
+    expect(
+      loadConfig({ KAFKA_BROKERS: 'a:9092', KAFKA_MCP_ALLOW_WRITES: 'false' }).allowWrites
+    ).toBe(false)
+    expect(() => loadConfig({ KAFKA_BROKERS: 'a:9092', KAFKA_MCP_ALLOW_WRITES: 'yes' })).toThrow(
+      /KAFKA_MCP_ALLOW_WRITES/
+    )
   })
 
   it('turns SSL on for MSK IAM unless told otherwise', () => {

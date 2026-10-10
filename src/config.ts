@@ -25,7 +25,8 @@ const envSchema = z
     AWS_REGION: z.string().optional(),
     KAFKA_MCP_MAX_MESSAGES: z.coerce.number().int().min(1).max(1000).default(50),
     KAFKA_MCP_MAX_VALUE_BYTES: z.coerce.number().int().min(64).max(1_048_576).default(4096),
-    KAFKA_MCP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(15_000)
+    KAFKA_MCP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(15_000),
+    KAFKA_MCP_ALLOW_WRITES: flag.default(false)
   })
   .superRefine((env, ctx) => {
     if (env.KAFKA_AUTH === 'aws-msk-iam' && !env.AWS_REGION) {
@@ -54,6 +55,7 @@ export interface Config {
   maxMessages: number
   maxValueBytes: number
   timeoutMs: number
+  allowWrites: boolean
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -86,6 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     ssl: e.KAFKA_SSL ?? auth.type === 'aws-msk-iam',
     maxMessages: e.KAFKA_MCP_MAX_MESSAGES,
     maxValueBytes: e.KAFKA_MCP_MAX_VALUE_BYTES,
-    timeoutMs: e.KAFKA_MCP_TIMEOUT_MS
+    timeoutMs: e.KAFKA_MCP_TIMEOUT_MS,
+    allowWrites: e.KAFKA_MCP_ALLOW_WRITES
   }
 }
