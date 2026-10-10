@@ -210,6 +210,12 @@ describe.skipIf(!brokers)('kafka-mcp against a broker', () => {
     expect(read.messages[1].value.data).toHaveLength(1024)
   })
 
+  it('reports an unknown consumer group as not found', async () => {
+    const result = await call('describe_consumer_group', { groupId: `missing-${run}` })
+    expect(result.isError).toBe(true)
+    expect(result.text).toMatch(/not found/)
+  })
+
   it('lists and describes a consumer group with its lag', async () => {
     const groups = (await call('list_consumer_groups')).json()
     expect(groups.map((g: { groupId: string }) => g.groupId)).toContain(group)
@@ -363,6 +369,16 @@ describe.skipIf(!brokers)('kafka-mcp with writes enabled', () => {
     expect(read.messages[3].value).toMatchObject({ encoding: 'base64', data: '//4A' })
   })
 
+  it('refuses a value that is not valid base64', async () => {
+    const result = await call('produce_message', {
+      topic,
+      value: 'bad-b64',
+      valueEncoding: 'base64'
+    })
+    expect(result.isError).toBe(true)
+    expect(result.text).toMatch(/not valid standard base64/)
+  })
+
   it('creates a topic', async () => {
     expect((await call('create_topic', { topic: created, partitions: 3 })).json()).toMatchObject({
       topic: created,
@@ -439,6 +455,13 @@ describe.skipIf(!brokers)('kafka-mcp with writes enabled', () => {
     } finally {
       await active.disconnect()
     }
+  })
+
+  it('says why a missing consumer group could not be deleted', async () => {
+    const missing = `missing-${run}`
+    const result = await call('delete_consumer_group', { groupId: missing, confirm: missing })
+    expect(result.isError).toBe(true)
+    expect(result.text).toMatch(new RegExp(`Could not delete consumer group ${missing}: .+`))
   })
 
   it('deletes a consumer group only when confirmed', async () => {

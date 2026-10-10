@@ -37,7 +37,7 @@ export class KafkaWriter {
       topic: request.topic,
       messages: [
         {
-          value: Buffer.from(request.value, request.valueEncoding),
+          value: decodeValue(request.value, request.valueEncoding),
           key: request.key,
           partition: request.partition,
           headers: request.headers
@@ -147,8 +147,20 @@ export class KafkaWriter {
   async deleteConsumerGroup(groupId: string, confirm: string) {
     requireConfirmation(groupId, confirm)
     const admin = await this.clients.admin()
-    const [result] = await admin.deleteGroups([groupId], { timeout: this.clients.config.timeoutMs })
-    if (result?.error) throw new Error(result.error.message)
+    try {
+      const [result] = await admin.deleteGroups([groupId], {
+        timeout: this.clients.config.timeoutMs
+      })
+      if (result?.error) throw new Error(result.error.message)
+    } catch (err) {
+      // The client throws "Error in DeleteGroups" and keeps the per-group cause in `groups`.
+      const groups = (err as { groups?: Array<{ error?: { message?: string } }> }).groups
+      const cause = groups?.map((g) => g.error?.message).find(Boolean)
+      if (cause) {
+        throw new Error(`Could not delete consumer group ${groupId}: ${cause}`, { cause: err })
+      }
+      throw err
+    }
     return { groupId, deleted: true }
   }
 
@@ -206,4 +218,15 @@ function requireConfirmation(name: string, confirm: string): void {
   if (confirm !== name) {
     throw new Error(`Refused: confirm must repeat the exact name "${name}"`)
   }
+}
+
+const base64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+
+// Node decodes base64 leniently (it accepts the URL-safe alphabet and drops invalid characters), so a
+// malformed value would be produced as something other than what the caller sent.
+function decodeValue(value: string, encoding: 'utf8' | 'base64'): Buffer {
+  if (encoding === 'base64' && !base64.test(value)) {
+    throw new Error('value is not valid standard base64 (A-Z, a-z, 0-9, +, /, = padding)')
+  }
+  return Buffer.from(value, encoding)
 }

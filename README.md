@@ -35,6 +35,11 @@ An offset reset is refused while the group has active members, as Kafka requires
 still decide what reaches the broker: with MSK IAM, writes also need `kafka-cluster:WriteData`,
 `CreateTopic`, `DeleteTopic`, `AlterGroup` and `DeleteGroup`.
 
+## Limitations
+
+- Topic and broker configs are not available: `@confluentinc/kafka-javascript` has no
+  DescribeConfigs API yet ([confluent-kafka-javascript#444](https://github.com/confluentinc/confluent-kafka-javascript/issues/444)).
+
 ## Read-only, by construction
 
 - With writes off, no producer is ever created and no admin operation that changes the cluster is

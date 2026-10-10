@@ -123,6 +123,15 @@ export class KafkaReader {
       throw new Error(group?.error?.message ?? `Consumer group ${groupId} not found`)
     }
     const committed = await admin.fetchOffsets({ groupId, timeout: this.config.timeoutMs })
+    // Kafka answers DescribeGroups for any id: an unknown group comes back DEAD, with no members and
+    // no committed offsets, rather than as an error.
+    if (
+      group.state === KafkaJS.ConsumerGroupStates.DEAD &&
+      group.members.length === 0 &&
+      committed.every(({ partitions }) => partitions.every((p) => Number(p.offset) < 0))
+    ) {
+      throw new Error(`Consumer group ${groupId} not found`)
+    }
     const topics = await Promise.all(
       committed.map(async ({ topic, partitions }) => {
         const watermarks = await this.watermarks(topic)

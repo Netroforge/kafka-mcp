@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+- `describe_consumer_group` reports an unknown group as not found (Kafka describes any id, as DEAD).
+- `delete_consumer_group` says why a group could not be deleted.
+- `produce_message` refuses a `base64` value that is not valid standard base64 instead of letting
+  Node decode it leniently into something else.
+- The read-only guard also forbids `deleteRecords`.
+
 ## 0.2.1
 
 - `create_topic` without `replicationFactor` uses 3, or the broker count on a smaller cluster,

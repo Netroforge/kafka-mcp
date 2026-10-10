@@ -11,6 +11,7 @@ const forbidden = [
   /\bcreateTopics?\b/,
   /\bdeleteTopics?\b/,
   /\bdeleteTopicRecords\b/,
+  /\bdeleteRecords\b/,
   /\bcreatePartitions\b/,
   /\bdeleteGroups\b/,
   /\bsetOffsets\b/,
