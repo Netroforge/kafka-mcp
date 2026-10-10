@@ -77,18 +77,19 @@ x64 and arm64, macOS, Windows).
 
 ## Configuration
 
-| Variable                    | Default     | Notes                                                                   |
-| --------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `KAFKA_BROKERS`             | (required)  | Comma-separated `host:port` list                                        |
-| `KAFKA_AUTH`                | `none`      | `none`, `plain`, `scram-sha-256`, `scram-sha-512` or `aws-msk-iam`      |
-| `KAFKA_SSL`                 | see notes   | `true`/`false`; defaults to `true` for `aws-msk-iam`, otherwise `false` |
-| `KAFKA_SASL_USERNAME`       |             | For `plain` and `scram-*`                                               |
-| `KAFKA_SASL_PASSWORD`       |             | For `plain` and `scram-*`                                               |
-| `AWS_REGION`                |             | Required for `aws-msk-iam`; credentials come from the default AWS chain |
-| `KAFKA_CLIENT_ID`           | `kafka-mcp` |                                                                         |
-| `KAFKA_MCP_MAX_MESSAGES`    | `50`        | Upper bound for `read_messages` `limit`                                 |
-| `KAFKA_MCP_MAX_VALUE_BYTES` | `4096`      | Keys, values and headers are cut at this size                           |
-| `KAFKA_MCP_TIMEOUT_MS`      | `15000`     | Per Kafka request                                                       |
+| Variable                    | Default     | Notes                                                                      |
+| --------------------------- | ----------- | -------------------------------------------------------------------------- |
+| `KAFKA_BROKERS`             | (required)  | Comma-separated `host:port` list                                           |
+| `KAFKA_AUTH`                | `none`      | `none`, `plain`, `scram-sha-256`, `scram-sha-512` or `aws-msk-iam`         |
+| `KAFKA_SSL`                 | see notes   | `true`/`false`; defaults to `true` for `aws-msk-iam`, otherwise `false`    |
+| `KAFKA_SASL_USERNAME`       |             | For `plain` and `scram-*`                                                  |
+| `KAFKA_SASL_PASSWORD`       |             | For `plain` and `scram-*`                                                  |
+| `AWS_REGION`                |             | Required for `aws-msk-iam`; credentials come from the default AWS chain    |
+| `KAFKA_CLIENT_ID`           | `kafka-mcp` |                                                                            |
+| `KAFKA_MCP_MAX_MESSAGES`    | `50`        | Upper bound for `read_messages` `limit`                                    |
+| `KAFKA_MCP_MAX_VALUE_BYTES` | `4096`      | Keys, values and headers are cut at this size                              |
+| `KAFKA_MCP_TIMEOUT_MS`      | `15000`     | Per Kafka request                                                          |
+| `KAFKA_MCP_ALLOW_WRITES`    | `false`     | `true` adds the write tools (see [Write mode](#write-mode-off-by-default)) |
 
 With `aws-msk-iam` the credentials come from the standard AWS provider chain: environment
 variables, a web identity token (EKS IRSA / Pod Identity), or an instance profile.
