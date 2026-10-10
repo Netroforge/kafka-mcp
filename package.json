@@ -1,0 +1,47 @@
+{
+  "name": "@netroforge/kafka-mcp",
+  "version": "0.1.0",
+  "description": "Read-only MCP server for Apache Kafka, with AWS MSK IAM authentication",
+  "license": "Apache-2.0",
+  "author": "Netroforge",
+  "homepage": "https://github.com/Netroforge/kafka-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Netroforge/kafka-mcp.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "kafka-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@confluentinc/kafka-javascript": "1.10.1",
+    "@modelcontextprotocol/sdk": "1.30.1",
+    "aws-msk-iam-sasl-signer-js": "1.0.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.0",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.2"
+  }
+}

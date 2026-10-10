@@ -1,0 +1,43 @@
+# Integration tests against a real broker, in the runtime Archestra-style hosts use (Node 24 on Alpine,
+# musl). Run: docker compose -f compose.test.yaml up --build --exit-code-from test
+# Images come from mirror.gcr.io rather than Docker Hub to stay clear of its pull rate limit.
+name: kafka-mcp-test
+services:
+  kafka:
+    image: mirror.gcr.io/confluentinc/cp-kafka:7.9.2
+    environment:
+      CLUSTER_ID: 'a2Fma2EtbWNwLXRlc3QtMQ'
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ['CMD', 'kafka-topics', '--bootstrap-server', 'kafka:9092', '--list']
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  test:
+    image: mirror.gcr.io/library/node:24-alpine
+    working_dir: /w
+    user: '${HOST_UID:-1000}:${HOST_GID:-1000}'
+    environment:
+      HOME: /tmp
+      npm_config_cache: /tmp/.npm
+      KAFKA_TEST_BROKERS: kafka:9092
+    volumes:
+      - .:/w
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >
+      sh -c "npm ci --no-audit --no-fund &&
+             npm run type-check && npm run lint && npm run format:check &&
+             npm run build && npm test"

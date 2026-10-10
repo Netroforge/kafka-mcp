@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Type-check, lint, format, build and test against a broker
+        run: HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f compose.test.yaml up --quiet-pull --exit-code-from test
+
+      - name: Install from git the way a consumer does (npx github:Netroforge/kafka-mcp#<sha>)
+        run: |
+          docker run --rm -e HOME=/tmp mirror.gcr.io/library/node:24-alpine sh -c "
+            apk add --no-cache git >/dev/null &&
+            cd /tmp && npm install --no-audit --no-fund github:${{ github.repository }}#${{ github.sha }} >/dev/null &&
+            KAFKA_BROKERS=unused:9092 timeout 5 ./node_modules/.bin/kafka-mcp < /dev/null; test \$? -eq 0"
