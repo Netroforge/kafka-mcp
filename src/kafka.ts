@@ -298,6 +298,11 @@ export class KafkaClients {
       const admin = this.kafka().admin()
       try {
         await admin.connect()
+        // connect() returns before the brokers are connected and authenticated (with MSK IAM the
+        // OAUTHBEARER token arrives asynchronously). A request that fans out to every broker, like
+        // ListGroups, then times out if it is the first one; a metadata request first brings the
+        // connections up. Seen against staging MSK: first listGroups 15s timeout, after this ~2s.
+        await admin.fetchTopicMetadata({ timeout: this.config.timeoutMs })
       } catch (err) {
         this.adminConnecting = undefined
         throw err

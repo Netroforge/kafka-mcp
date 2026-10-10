@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- The admin client makes a metadata request right after connecting. Against MSK with IAM auth, a
+  fresh client's first request that fans out to every broker (`list_consumer_groups`) timed out,
+  and a late reply to that timed-out request could abort the process inside librdkafka.
+
 ## 0.2.2
 
 - `describe_consumer_group` reports an unknown group as not found (Kafka describes any id, as DEAD).
