@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { loadConfig } from '../src/config.js'
 import { KafkaClients, KafkaReader } from '../src/kafka.js'
 import { createServer } from '../src/tools.js'
-import { KafkaWriter } from '../src/write.js'
+import { commitWithRetry, KafkaWriter } from '../src/write.js'
 import { registerWriteTools } from '../src/write-tools.js'
 
 const { KafkaJS, KafkaConsumer } = kafkaLib
@@ -73,10 +73,13 @@ describe.skipIf(!brokers)('kafka-mcp against a broker', () => {
     await new Promise<void>((resolve, reject) =>
       committer.connect({}, (err) => (err ? reject(err) : resolve()))
     )
-    committer.commitSync([
-      { topic, partition: 0, offset: 3 },
-      { topic, partition: 1, offset: 5 }
-    ])
+    // A fresh broker may still be loading its offsets topic; retry as the writer does.
+    await commitWithRetry(() =>
+      committer.commitSync([
+        { topic, partition: 0, offset: 3 },
+        { topic, partition: 1, offset: 5 }
+      ])
+    )
     await new Promise<void>((resolve) => committer.disconnect(() => resolve()))
 
     const config = loadConfig({ KAFKA_BROKERS: brokers, KAFKA_MCP_MAX_VALUE_BYTES: '1024' })

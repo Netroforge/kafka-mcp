@@ -190,7 +190,7 @@ export class KafkaWriter {
       )
     )
     try {
-      consumer.commitSync(offsets)
+      await commitWithRetry(() => consumer.commitSync(offsets))
     } finally {
       await new Promise<void>((resolve) => consumer.disconnect(() => resolve()))
     }
@@ -229,4 +229,23 @@ function decodeValue(value: string, encoding: 'utf8' | 'base64'): Buffer {
     throw new Error('value is not valid standard base64 (A-Z, a-z, 0-9, +, /, = padding)')
   }
   return Buffer.from(value, encoding)
+}
+
+// The group coordinator can be briefly unavailable (a broker restarting, or the offsets topic still
+// loading on a new cluster); Kafka answers NOT_COORDINATOR / COORDINATOR_LOAD_IN_PROGRESS and expects
+// a retry.
+const transientCoordinatorErrors =
+  /not coordinator|coordinator load in progress|coordinator not available/i
+
+export async function commitWithRetry(commit: () => void, attempts = 10): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      commit()
+      return
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (attempt >= attempts || !transientCoordinatorErrors.test(message)) throw err
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
+    }
+  }
 }

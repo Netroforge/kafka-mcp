@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadConfig } from '../src/config.js'
 import { formatData } from '../src/format.js'
+import { commitWithRetry } from '../src/write.js'
 
 describe('loadConfig', () => {
   it('defaults to no auth, plaintext and bounded reads', () => {
@@ -71,5 +72,27 @@ describe('formatData', () => {
 
   it('treats null as absent', () => {
     expect(formatData(null, 100)).toBeNull()
+  })
+})
+
+describe('commitWithRetry', () => {
+  it('retries a coordinator that is not ready, then commits', async () => {
+    let calls = 0
+    await commitWithRetry(() => {
+      calls++
+      if (calls < 3) throw new Error('Broker: Not coordinator')
+    })
+    expect(calls).toBe(3)
+  })
+
+  it('does not retry other errors', async () => {
+    let calls = 0
+    await expect(
+      commitWithRetry(() => {
+        calls++
+        throw new Error('Broker: Group authorization failed')
+      })
+    ).rejects.toThrow(/authorization/)
+    expect(calls).toBe(1)
   })
 })

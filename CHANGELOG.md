@@ -7,6 +7,7 @@
 - `produce_message` refuses a `base64` value that is not valid standard base64 instead of letting
   Node decode it leniently into something else.
 - The read-only guard also forbids `deleteRecords`.
+- `reset_consumer_group_offsets` retries while the group coordinator is not ready.
 
 ## 0.2.1
 
